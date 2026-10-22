@@ -70,3 +70,10 @@ assert(offers.length > 0);
 for (const o of offers) { assert.deepStrictEqual(o.give, block); assert(o.them.score >= -4); assert(o.get.length <= 3); }
 assert.strictEqual(E.findOffers(L, '1', [me.playerIds[0]]).every((o) => o.get.length <= 2), true);
 console.log('ok offers');
+
+// Position filter: everything received is at the wanted positions.
+const rbOffers = E.findOffers(L, '1', block, { wantPos: ['RB'] });
+assert(rbOffers.length > 0 && rbOffers.every((o) => o.get.every((id) => L.players[id].pos === 'RB')));
+const teTrades = E.findTrades(L, '1', { wantPos: ['TE'] });
+assert(teTrades.every((t) => t.get.every((id) => L.players[id].pos === 'TE')));
+console.log(`ok position filter (${rbOffers.length} RB offers, ${teTrades.length} TE trades)`);

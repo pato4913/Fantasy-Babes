@@ -255,13 +255,14 @@
     const repl = replacementValue(league);
     const mine = teamById(league, myTeamId);
     const points = hasProj(league);
+    const wanted = (p) => !opts.wantPos || !opts.wantPos.length || opts.wantPos.includes(p);
     const vOut = sum(give.map(ctx.val));
     const maxGet = Math.min(3, give.length + 1);
     const cache = {};
     const prelim = [];
     for (const partner of league.teams) {
       if (String(partner.id) === String(myTeamId)) continue;
-      const pool = partner.playerIds.filter((id) => ctx.val(id) > 0 && POS.includes(ctx.pos(id)))
+      const pool = partner.playerIds.filter((id) => ctx.val(id) > 0 && POS.includes(ctx.pos(id)) && wanted(ctx.pos(id)))
         .sort((a, b) => ctx.val(b) - ctx.val(a)).slice(0, 16);
       for (let k = 1; k <= maxGet; k++) {
         for (const get of combos(pool, k)) {
@@ -307,6 +308,7 @@
     const repl = replacementValue(league);
     const mine = teamById(league, myTeamId);
     const points = hasProj(league);
+    const wanted = (p) => !opts.wantPos || !opts.wantPos.length || opts.wantPos.includes(p);
     const myPool = mine.playerIds.filter((id) => ctx.val(id) > 0 && POS.includes(ctx.pos(id)))
       .sort((a, b) => ctx.val(b) - ctx.val(a)).slice(0, 14);
     const shapes = opts.shapes || [[1, 1], [2, 1], [1, 2], [2, 2]];
@@ -314,7 +316,7 @@
     for (const partner of league.teams) {
       if (String(partner.id) === String(myTeamId)) continue;
       if (opts.partnerId && String(partner.id) !== String(opts.partnerId)) continue;
-      const theirPool = partner.playerIds.filter((id) => ctx.val(id) > 0 && POS.includes(ctx.pos(id)))
+      const theirPool = partner.playerIds.filter((id) => ctx.val(id) > 0 && POS.includes(ctx.pos(id)) && wanted(ctx.pos(id)))
         .sort((a, b) => ctx.val(b) - ctx.val(a)).slice(0, 14);
       for (const [g, r] of shapes) {
         const lim = g === 2 && r === 2 ? 9 : 14;

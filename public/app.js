@@ -13,7 +13,7 @@
   const state = {
     league: null, myTeamId: null, tab: 'team', conn: null,
     grader: { partnerId: null, give: new Set(), get: new Set() },
-    finderPartner: 'all', finderCache: null, finderView: 'suggest', shopBlock: new Set(), waiverPos: 'ALL', mode: 'balanced', lineupWeek: null,
+    finderPartner: 'all', finderCache: null, finderView: 'suggest', shopBlock: new Set(), wantPos: new Set(), waiverPos: 'ALL', mode: 'balanced', lineupWeek: null,
   };
   const TABS = ['team', 'lineup', 'grader', 'finder', 'waivers'];
 
@@ -696,6 +696,13 @@
         <select id="finder-partner"><option value="all">All teams</option>${others.map((t) => `<option value="${esc(t.id)}"${state.finderPartner === t.id ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
         ${modeSelect('finder-mode')}
       </div>
+      <div class="toolbar">
+        <span class="field-inline">Positions you want</span>
+        <div class="chips" role="group" aria-label="Positions you want back">
+          <button type="button" class="chip" data-want="ALL" aria-pressed="${!state.wantPos.size}">Any</button>
+          ${Engine.POS.map((p) => `<button type="button" class="chip" data-want="${p}" aria-pressed="${state.wantPos.has(p)}">${p}</button>`).join('')}
+        </div>
+      </div>
       ${shop ? `<div class="panel shop-panel">
           <div class="side-head"><h3 class="sec">Players you want to trade</h3><span class="muted" id="shop-total"></span></div>
           <p class="detail" style="margin:0 0 10px">Pick one or more players. You'll see the best packages each manager could offer for that group and would likely accept.</p>
@@ -706,6 +713,17 @@
     $('#finder-partner').addEventListener('change', (e) => { state.finderPartner = e.target.value; state.finderCache = null; renderFinder(v); });
     v.querySelectorAll('.chip[data-view]').forEach((c) => c.addEventListener('click', () => {
       state.finderView = c.dataset.view; state.finderCache = null; renderFinder(v);
+    }));
+    v.querySelectorAll('.chip[data-want]').forEach((c) => c.addEventListener('click', () => {
+      const p = c.dataset.want;
+      if (p === 'ALL') state.wantPos.clear();
+      else if (state.wantPos.has(p)) state.wantPos.delete(p);
+      else state.wantPos.add(p);
+      if (state.wantPos.size === Engine.POS.length) state.wantPos.clear();
+      v.querySelectorAll('.chip[data-want]').forEach((x) => x.setAttribute('aria-pressed',
+        String(x.dataset.want === 'ALL' ? !state.wantPos.size : state.wantPos.has(x.dataset.want))));
+      state.finderCache = null;
+      runFinder();
     }));
     v.querySelectorAll('[data-shop]').forEach((b) => b.addEventListener('click', () => {
       const id = b.dataset.shop;
@@ -731,15 +749,16 @@
     out.innerHTML = `<p class="loading">${shop ? 'Building offers from every roster…' : 'Scanning every roster…'}</p>`;
     clearTimeout(finderTimer);
     finderTimer = setTimeout(() => {
-      const key = `${state.myTeamId}|${state.finderPartner}|${state.mode}|${state.finderView}|${block.join(',')}`;
+      const wantPos = [...state.wantPos];
+      const key = `${state.myTeamId}|${state.finderPartner}|${state.mode}|${state.finderView}|${block.join(',')}|${wantPos.join(',')}`;
       if (!state.finderCache || state.finderCache.key !== key) {
         let trades;
         if (shop) {
-          trades = Engine.findOffers(L, state.myTeamId, block, { mode: state.mode, limit: 40, perTeam: state.finderPartner === 'all' ? 2 : 6 });
+          trades = Engine.findOffers(L, state.myTeamId, block, { mode: state.mode, wantPos, limit: 40, perTeam: state.finderPartner === 'all' ? 2 : 6 });
           if (state.finderPartner !== 'all') trades = trades.filter((t) => t.partner.id === state.finderPartner);
           trades = trades.slice(0, 15);
         } else {
-          const opts = state.finderPartner === 'all' ? { limit: 12, mode: state.mode } : { partnerId: state.finderPartner, limit: 9, mode: state.mode };
+          const opts = state.finderPartner === 'all' ? { limit: 12, mode: state.mode, wantPos } : { partnerId: state.finderPartner, limit: 9, mode: state.mode, wantPos };
           trades = Engine.findTrades(L, state.myTeamId, opts);
         }
         state.finderCache = { key, trades };
@@ -751,8 +770,8 @@
   function renderTradeCards(out, trades, shop) {
     if (!trades.length) {
       out.innerHTML = `<p class="empty">${shop
-        ? 'No manager has a package that matches this group. Try adding or removing a player, or pick another trade partner.'
-        : 'No trades found that help both sides. Try another partner, or check back after values move.'}</p>`;
+        ? `No manager has a package that matches this group${state.wantPos.size ? ' at ' + [...state.wantPos].join('/') : ''}. Try adding or removing a player, another position, or another trade partner.`
+        : `No trades found that help both sides${state.wantPos.size ? ' at ' + [...state.wantPos].join('/') : ''}. Try another position or partner, or check back after values move.`}</p>`;
       return;
     }
     const plist = (ids) => `<ul class="plist">${ids.map((id) => `<li>${posChip(P(id).pos)}<span class="nm">${esc(P(id).name)}${injBadge(P(id).injury)}</span><span class="num muted">${fmt(V(id))}</span></li>`).join('')}</ul>`;
