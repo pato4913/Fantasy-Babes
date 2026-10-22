@@ -347,12 +347,19 @@
     }).then(() => { if (btn.dataset.next) { btn.textContent = 'Load league'; delete btn.dataset.next; } });
   });
 
+  // Accept either the bare number or a pasted league URL.
+  function espnLeagueId(raw) {
+    const v = String(raw || '').trim();
+    const m = v.match(/leagueId=(\d+)/i);
+    return m ? m[1] : v.replace(/\D/g, '');
+  }
+
   $('#espn-form').addEventListener('submit', (ev) => {
     ev.preventDefault();
     const btn = ev.submitter || $('#espn-form .btn');
     withBusy(btn, async () => {
       const conn = {
-        platform: 'espn', leagueId: $('#espn-league').value.trim(), season: $('#espn-season').value.trim() || currentSeasonGuess(),
+        platform: 'espn', leagueId: espnLeagueId($('#espn-league').value), season: $('#espn-season').value.trim() || currentSeasonGuess(),
         s2: $('#espn-s2').value.trim(), swid: $('#espn-swid').value.trim(),
       };
       setStatus('Loading your ESPN league and player values…');

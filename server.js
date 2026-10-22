@@ -125,6 +125,8 @@ async function handleApi(url, req) {
     } catch (e) {
       if (e.status === 401 || e.status === 403) {
         e.message = 'ESPN says this league is private. Add your espn_s2 and SWID cookies.';
+      } else if (e.status === 400) {
+        e.message = `ESPN rejected league ID ${leagueId}. Copy only the number right after "leagueId=" in your league's web address, stopping before any "&".`;
       } else if (e.status === 404) {
         e.message = 'ESPN could not find that league for that season.';
       }
