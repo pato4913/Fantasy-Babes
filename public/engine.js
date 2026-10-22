@@ -244,8 +244,60 @@
   function combos(arr, k) {
     if (k === 1) return arr.map((x) => [x]);
     const out = [];
-    for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) out.push([arr[i], arr[j]]);
+    for (let i = 0; i < arr.length; i++) for (const rest of combos(arr.slice(i + 1), k - 1)) out.push([arr[i], ...rest]);
     return out;
+  }
+
+  // Offers other managers could make for a fixed group of your players: packages of 1–3 of their
+  // players that they would accept, ranked by how good they are for you.
+  function findOffers(league, myTeamId, give, opts = {}) {
+    const ctx = ctxFor(league);
+    const repl = replacementValue(league);
+    const mine = teamById(league, myTeamId);
+    const points = hasProj(league);
+    const vOut = sum(give.map(ctx.val));
+    const maxGet = Math.min(3, give.length + 1);
+    const cache = {};
+    const prelim = [];
+    for (const partner of league.teams) {
+      if (String(partner.id) === String(myTeamId)) continue;
+      const pool = partner.playerIds.filter((id) => ctx.val(id) > 0 && POS.includes(ctx.pos(id)))
+        .sort((a, b) => ctx.val(b) - ctx.val(a)).slice(0, 16);
+      for (let k = 1; k <= maxGet; k++) {
+        for (const get of combos(pool, k)) {
+          const vIn = sum(get.map(ctx.val));
+          if (vIn < vOut * 0.6 - repl || vIn > vOut * 1.25 + repl) continue;
+          const them = sideResult(league, ctx, partner, get, give, repl);
+          if (them.valuePct < -0.1 || them.valueScore < -4) continue;
+          const me = sideResult(league, ctx, mine, give, get, repl);
+          prelim.push({ partner, give, get, me, them, rank: me.valueScore });
+        }
+      }
+    }
+    prelim.sort((a, b) => b.rank - a.rank);
+    let results = prelim.slice(0, 600);
+    if (points) {
+      results = results.map((r) => {
+        const me = sideResult(league, ctx, mine, give, r.get, repl, { points, mode: opts.mode, cache });
+        const them = sideResult(league, ctx, r.partner, r.get, give, repl, { points, mode: 'balanced', cache });
+        return { ...r, me, them };
+      }).filter((r) => r.them.score >= -4);
+    }
+    results.forEach((r) => { r.rank = r.me.score + 0.3 * clamp(r.them.score, -5, 6); });
+    results.sort((a, b) => b.rank - a.rank);
+    const perTeam = {};
+    const seenPlayer = {};
+    const picked = [];
+    for (const r of results) {
+      if ((perTeam[r.partner.id] || 0) >= (opts.perTeam || 2)) continue;
+      if (r.get.some((id) => (seenPlayer[id] || 0) >= 1)) continue;
+      perTeam[r.partner.id] = (perTeam[r.partner.id] || 0) + 1;
+      r.get.forEach((id) => { seenPlayer[id] = 1; });
+      r.notes = tradeNotes(league, r.me, r.them);
+      picked.push(r);
+      if (picked.length >= (opts.limit || 15)) break;
+    }
+    return picked;
   }
 
   // Search every other roster for trades that improve your lineup and that the other manager
@@ -450,7 +502,7 @@
   }
 
   const Engine = { POS, ALL_POS, MODES, hasProj, timeframes, optimalLineup, pointsOver, evaluate, analyzeLeague, gradeTrade, findTrades, recommendWaivers, replacementValue,
-    valuesFromProjections, normName, letter, slotLabel, ordinal, compact, teamById, rosterLimit, ctxFor };
+    findOffers, valuesFromProjections, normName, letter, slotLabel, ordinal, compact, teamById, rosterLimit, ctxFor };
   if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   else root.Engine = Engine;
 })(typeof self !== 'undefined' ? self : this);

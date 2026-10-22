@@ -239,3 +239,6 @@ tr.dim td { opacity: 0.55; }
 .lens-sub { font-size: 12px; color: var(--muted); }
 .side-tag { font: 600 10px/1 var(--font-data); text-transform: uppercase; padding: 3px 5px; border-radius: 3px; border: 1px solid currentColor; }
 .side-tag.in { color: var(--good); } .side-tag.out { color: var(--bad); }
+
+.shop-panel { margin-bottom: 16px; }
+.shop-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 6px; max-height: 300px; overflow-y: auto; }

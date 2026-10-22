@@ -13,7 +13,7 @@
   const state = {
     league: null, myTeamId: null, tab: 'team', conn: null,
     grader: { partnerId: null, give: new Set(), get: new Set() },
-    finderPartner: 'all', finderCache: null, waiverPos: 'ALL', mode: 'balanced', lineupWeek: null,
+    finderPartner: 'all', finderCache: null, finderView: 'suggest', shopBlock: new Set(), waiverPos: 'ALL', mode: 'balanced', lineupWeek: null,
   };
   const TABS = ['team', 'lineup', 'grader', 'finder', 'waivers'];
 
@@ -293,6 +293,7 @@
     state.myTeamId = league.myTeamId || store.get(`team:${league.platform}:${league.id}`) || league.teams[0].id;
     state.grader = { partnerId: null, give: new Set(), get: new Set() };
     state.finderCache = null;
+    state.shopBlock = new Set();
     state.mode = store.get('mode') || (league.isDynasty ? 'long' : 'balanced');
     state.lineupWeek = league.week;
     if (conn) store.set('last', conn);
@@ -683,41 +684,92 @@
   function renderFinder(v) {
     const L = state.league;
     const others = L.teams.filter((t) => t.id !== state.myTeamId);
+    const shop = state.finderView === 'shop';
+    const mineIds = myTeam().playerIds.filter((id) => Engine.POS.includes(P(id).pos)).sort((a, b) => V(b) - V(a));
+    for (const id of [...state.shopBlock]) if (!mineIds.includes(id)) state.shopBlock.delete(id);
     v.innerHTML = `<div class="toolbar">
+        <div class="chips" role="group" aria-label="Finder mode">
+          <button type="button" class="chip" data-view="suggest" aria-pressed="${!shop}">Suggested trades</button>
+          <button type="button" class="chip" data-view="shop" aria-pressed="${shop}">Shop my players</button>
+        </div>
         <label class="field-inline" for="finder-partner">Trade partner</label>
         <select id="finder-partner"><option value="all">All teams</option>${others.map((t) => `<option value="${esc(t.id)}"${state.finderPartner === t.id ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
         ${modeSelect('finder-mode')}
-        <span class="muted" style="font-size:13px">Deals that improve your team and that the other manager has a reason to accept.</span>
       </div>
-      <div id="finder-results"><p class="loading">Scanning every roster…</p></div>`;
+      ${shop ? `<div class="panel shop-panel">
+          <div class="side-head"><h3 class="sec">Players you want to trade</h3><span class="muted" id="shop-total"></span></div>
+          <p class="detail" style="margin:0 0 10px">Pick one or more players. You'll see the best packages each manager could offer for that group and would likely accept.</p>
+          <div class="shop-picks">${mineIds.map((id) => `<button type="button" class="pick" data-shop="${esc(id)}" aria-pressed="${state.shopBlock.has(id)}">
+            ${posChip(P(id).pos)}<span class="nm">${esc(P(id).name)}${injBadge(P(id).injury)}</span><span class="num muted">${fmt(V(id))}</span></button>`).join('')}</div>
+        </div>` : `<p class="detail" style="margin:0 0 14px">Deals that improve your team and that the other manager has a reason to accept.</p>`}
+      <div id="finder-results"></div>`;
     $('#finder-partner').addEventListener('change', (e) => { state.finderPartner = e.target.value; state.finderCache = null; renderFinder(v); });
+    v.querySelectorAll('.chip[data-view]').forEach((c) => c.addEventListener('click', () => {
+      state.finderView = c.dataset.view; state.finderCache = null; renderFinder(v);
+    }));
+    v.querySelectorAll('[data-shop]').forEach((b) => b.addEventListener('click', () => {
+      const id = b.dataset.shop;
+      if (state.shopBlock.has(id)) state.shopBlock.delete(id); else state.shopBlock.add(id);
+      b.setAttribute('aria-pressed', String(state.shopBlock.has(id)));
+      state.finderCache = null;
+      runFinder();
+    }));
     bindMode(() => renderFinder(v));
-    setTimeout(() => {
-      const key = `${state.myTeamId}|${state.finderPartner}|${state.mode}`;
+    runFinder();
+  }
+
+  let finderTimer = null;
+  function runFinder() {
+    const L = state.league;
+    const out = $('#finder-results');
+    if (!out) return;
+    const shop = state.finderView === 'shop';
+    const block = [...state.shopBlock];
+    const total = $('#shop-total');
+    if (total) total.textContent = block.length ? `${block.length} selected · value ${fmt(block.reduce((s, id) => s + V(id), 0))}` : '';
+    if (shop && !block.length) { out.innerHTML = '<p class="empty">Pick the players you want to trade to see offers.</p>'; return; }
+    out.innerHTML = `<p class="loading">${shop ? 'Building offers from every roster…' : 'Scanning every roster…'}</p>`;
+    clearTimeout(finderTimer);
+    finderTimer = setTimeout(() => {
+      const key = `${state.myTeamId}|${state.finderPartner}|${state.mode}|${state.finderView}|${block.join(',')}`;
       if (!state.finderCache || state.finderCache.key !== key) {
-        const opts = state.finderPartner === 'all' ? { limit: 12, mode: state.mode } : { partnerId: state.finderPartner, limit: 9, mode: state.mode };
-        state.finderCache = { key, trades: Engine.findTrades(L, state.myTeamId, opts) };
+        let trades;
+        if (shop) {
+          trades = Engine.findOffers(L, state.myTeamId, block, { mode: state.mode, limit: 40, perTeam: state.finderPartner === 'all' ? 2 : 6 });
+          if (state.finderPartner !== 'all') trades = trades.filter((t) => t.partner.id === state.finderPartner);
+          trades = trades.slice(0, 15);
+        } else {
+          const opts = state.finderPartner === 'all' ? { limit: 12, mode: state.mode } : { partnerId: state.finderPartner, limit: 9, mode: state.mode };
+          trades = Engine.findTrades(L, state.myTeamId, opts);
+        }
+        state.finderCache = { key, trades };
       }
-      const trades = state.finderCache.trades;
-      const out = $('#finder-results');
-      if (!out) return;
-      if (!trades.length) { out.innerHTML = '<p class="empty">No trades found that help both sides. Try another partner, or check back after values move.</p>'; return; }
-      const plist = (ids) => `<ul class="plist">${ids.map((id) => `<li>${posChip(P(id).pos)}<span class="nm">${esc(P(id).name)}</span><span class="num muted">${fmt(V(id))}</span></li>`).join('')}</ul>`;
-      out.innerHTML = `<div class="cards">${trades.map((t, i) => `<article class="panel trade-card">
-          <div class="trade-top"><span class="partner">${esc(t.partner.name)}</span>
-            <span class="mini-grades"><span class="${gradeClass(t.me.grade)}" title="Your grade">You ${t.me.grade}</span><span class="${gradeClass(t.them.grade)}" title="Their grade">Them ${t.them.grade}</span></span></div>
-          <div class="swap"><div><h4>You send</h4>${plist(t.give)}</div><div><h4>You get</h4>${plist(t.get)}</div></div>
-          <p class="why">${t.me.lenses.ros
-            ? `This week ${signed(t.me.lenses.next.delta)} · Rest of season ${signed(t.me.lenses.ros.delta)}${t.me.lenses.playoffs ? ` · Playoffs ${signed(t.me.lenses.playoffs.delta)}` : ''} pts. `
-            : `Your lineup ${pct(t.me.lineupPct)}, theirs ${pct(t.them.lineupPct)}. `}${esc(t.notes.find((n) => /starting|consolidate|receive more/.test(n)) || '')}</p>
-          <button class="btn ghost small" type="button" data-open="${i}">Open in grader</button>
-        </article>`).join('')}</div>`;
-      out.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => {
-        const t = trades[Number(b.dataset.open)];
-        state.grader = { partnerId: t.partner.id, give: new Set(t.give), get: new Set(t.get) };
-        selectTab('grader');
-      }));
-    }, 20);
+      renderTradeCards(out, state.finderCache.trades, shop);
+    }, 30);
+  }
+
+  function renderTradeCards(out, trades, shop) {
+    if (!trades.length) {
+      out.innerHTML = `<p class="empty">${shop
+        ? 'No manager has a package that matches this group. Try adding or removing a player, or pick another trade partner.'
+        : 'No trades found that help both sides. Try another partner, or check back after values move.'}</p>`;
+      return;
+    }
+    const plist = (ids) => `<ul class="plist">${ids.map((id) => `<li>${posChip(P(id).pos)}<span class="nm">${esc(P(id).name)}${injBadge(P(id).injury)}</span><span class="num muted">${fmt(V(id))}</span></li>`).join('')}</ul>`;
+    out.innerHTML = `<div class="cards">${trades.map((t, i) => `<article class="panel trade-card">
+        <div class="trade-top"><span class="partner">${esc(t.partner.name)}</span>
+          <span class="mini-grades"><span class="${gradeClass(t.me.grade)}" title="Your grade">You ${t.me.grade}</span><span class="${gradeClass(t.them.grade)}" title="Their grade">Them ${t.them.grade}</span></span></div>
+        <div class="swap"><div><h4>You send</h4>${plist(t.give)}</div><div><h4>${shop ? 'They offer' : 'You get'}</h4>${plist(t.get)}</div></div>
+        <p class="why">${t.me.lenses.ros
+          ? `This week ${signed(t.me.lenses.next.delta)} · Rest of season ${signed(t.me.lenses.ros.delta)}${t.me.lenses.playoffs ? ` · Playoffs ${signed(t.me.lenses.playoffs.delta)}` : ''} pts. `
+          : `Your lineup ${pct(t.me.lineupPct)}, theirs ${pct(t.them.lineupPct)}. `}${esc(t.notes.find((n) => /starting|consolidate|receive more/.test(n)) || '')}</p>
+        <button class="btn ghost small" type="button" data-open="${i}">Open in grader</button>
+      </article>`).join('')}</div>`;
+    out.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => {
+      const t = trades[Number(b.dataset.open)];
+      state.grader = { partnerId: t.partner.id, give: new Set(t.give), get: new Set(t.get) };
+      selectTab('grader');
+    }));
   }
 
   // ---------- Waivers ----------

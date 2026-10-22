@@ -59,3 +59,14 @@ for (const mode of Object.keys(E.MODES)) {
   console.log(`findTrades ${mode}: ${tr.length} in ${Date.now() - t0}ms; top: give ${tr[0].give.map(name)} get ${tr[0].get.map(name)} me ${tr[0].me.grade} them ${tr[0].them.grade}`);
 }
 console.log('ok projections');
+
+// Shopping a fixed group: every offer sends exactly that group and is acceptable to the partner.
+const block = [me.playerIds[2], me.playerIds[4]];
+t0 = Date.now();
+const offers = E.findOffers(L, '1', block, { mode: 'balanced' });
+console.log(`findOffers for ${block.map(name)}: ${offers.length} in ${Date.now() - t0}ms`);
+for (const o of offers.slice(0, 5)) console.log(`  ${o.partner.name}: ${o.get.map(name)} | me ${o.me.grade} them ${o.them.grade}`);
+assert(offers.length > 0);
+for (const o of offers) { assert.deepStrictEqual(o.give, block); assert(o.them.score >= -4); assert(o.get.length <= 3); }
+assert.strictEqual(E.findOffers(L, '1', [me.playerIds[0]]).every((o) => o.get.length <= 2), true);
+console.log('ok offers');
