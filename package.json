@@ -1,0 +1,11 @@
+{
+  "name": "gridiron-gm",
+  "version": "1.0.0",
+  "description": "Fantasy football trade grader, trade finder and waiver assistant for Sleeper and ESPN leagues",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/engine.test.js"
+  },
+  "engines": { "node": ">=18" }
+}

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gridiron GM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark" aria-hidden="true">GM</span><span class="brand-name">Gridiron GM</span></div>
+  <div class="league-meta" id="league-meta" hidden>
+    <span class="league-name" id="league-name"></span>
+    <label class="field-inline">Team
+      <select id="team-select"></select>
+    </label>
+    <label class="field-inline">Values
+      <select id="type-select">
+        <option value="false">Redraft</option>
+        <option value="true">Dynasty</option>
+      </select>
+    </label>
+    <button class="btn ghost" id="switch-league" type="button">Switch league</button>
+  </div>
+</header>
+
+<main id="app">
+  <section id="connect" class="connect">
+    <div class="connect-intro">
+      <h1>Run your team like a front office.</h1>
+      <p>Connect a league to grade trades, find deals other managers will take, and see which free agents actually move your lineup.</p>
+    </div>
+    <div class="connect-grid">
+      <form class="panel connect-card" id="sleeper-form">
+        <h2><span class="plat sleeper">Sleeper</span></h2>
+        <label for="sleeper-user">Sleeper username</label>
+        <input id="sleeper-user" autocomplete="username" placeholder="e.g. fourthandforever" required>
+        <div id="sleeper-leagues" hidden>
+          <label for="sleeper-league">League</label>
+          <select id="sleeper-league"></select>
+        </div>
+        <button class="btn" type="submit" id="sleeper-go">Find my leagues</button>
+        <p class="hint">Sleeper leagues are public. No password needed.</p>
+      </form>
+
+      <form class="panel connect-card" id="espn-form">
+        <h2><span class="plat espn">ESPN</span></h2>
+        <div class="row2">
+          <div><label for="espn-league">League ID</label>
+            <input id="espn-league" inputmode="numeric" placeholder="from the league URL" required></div>
+          <div><label for="espn-season">Season</label>
+            <input id="espn-season" inputmode="numeric"></div>
+        </div>
+        <details class="cookies">
+          <summary>Private league? Add your ESPN cookies</summary>
+          <p class="hint">On fantasy.espn.com, open developer tools, go to Application → Cookies, and copy <code>espn_s2</code> and <code>SWID</code>. They are only used to read your league from ESPN and are never saved by the app.</p>
+          <label for="espn-s2">espn_s2</label>
+          <input id="espn-s2" autocomplete="off">
+          <label for="espn-swid">SWID</label>
+          <input id="espn-swid" autocomplete="off" placeholder="{XXXXXXXX-XXXX-...}">
+          <label class="check"><input type="checkbox" id="espn-remember"> Remember cookies on this computer</label>
+        </details>
+        <button class="btn" type="submit">Connect ESPN league</button>
+        <p class="hint">The league ID is the <code>leagueId=</code> number in your league's web address.</p>
+      </form>
+
+      <div class="panel connect-card demo-card">
+        <h2><span class="plat demo">Demo</span></h2>
+        <p>Try everything on a sample 10-team half-PPR league. Values are illustrative.</p>
+        <button class="btn ghost" type="button" id="demo-go">Open demo league</button>
+      </div>
+    </div>
+    <p class="status" id="connect-status" role="status"></p>
+  </section>
+
+  <section id="workspace" hidden>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="team" class="tab">My team</button>
+      <button role="tab" data-tab="lineup" class="tab">Lineup</button>
+      <button role="tab" data-tab="grader" class="tab">Trade grader</button>
+      <button role="tab" data-tab="finder" class="tab">Trade finder</button>
+      <button role="tab" data-tab="waivers" class="tab">Waivers</button>
+    </nav>
+    <p class="source" id="value-source"></p>
+    <div id="view"></div>
+  </section>
+</main>
+
+<script src="engine.js"></script>
+<script src="demo.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
